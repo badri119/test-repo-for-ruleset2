@@ -64,11 +64,15 @@ jobs:
             echo "repositories=$(cat repositories.json)" >> $GITHUB_OUTPUT
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ADMIN_GITHUB_TOKEN }}
 
   deploy-rulesets:
     runs-on: ubuntu-latest
     needs: get-repositories
+    permissions:
+      contents: read
+      pull-requests: write
+      repository-projects: write
     strategy:
       matrix:
         repository: ${{ fromJson(needs.get-repositories.outputs.repositories) }}
@@ -99,7 +103,7 @@ jobs:
         run: |
           cat > terraform.tfvars << EOF
           # Auto-generated terraform.tfvars for ${{ matrix.repository }}
-          github_token        = "${{ secrets.GITHUB_TOKEN }}"
+          github_token        = "${{ secrets.ADMIN_GITHUB_TOKEN }}"
           github_organization = "${{ github.repository_owner }}"
           repository_name     = "${{ matrix.repository }}"
           ruleset_name        = "${{ github.event.inputs.ruleset_name || 'Organization-Wide-PR-Checks' }}"
