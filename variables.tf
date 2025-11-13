@@ -114,21 +114,25 @@ variable "enable_tag_name_pattern" {
 variable "required_status_checks" {
   type = list(object({
     context        = string
-    integration_id = optional(number)
+    integration_id = number
   }))
-  description = "List of required status checks"
+  description = "List of required status checks (integration_id can be null)"
   default = [
     {
-      context = "terraform fmt"
+      context        = "terraform fmt"
+      integration_id = null
     },
     {
-      context = "tflint"
+      context        = "tflint"
+      integration_id = null
     },
     {
-      context = "terraform validate"
+      context        = "terraform validate"
+      integration_id = null
     },
     {
-      context = "checkov"
+      context        = "checkov"
+      integration_id = null
     }
   ]
 }
@@ -200,8 +204,8 @@ variable "tag_name_pattern" {
   type = object({
     operator = string
     pattern  = string
-    name     = optional(string)
-    negate   = optional(bool, false)
+    name     = string
+    negate   = bool
   })
   description = "Tag name pattern configuration"
   default     = null
