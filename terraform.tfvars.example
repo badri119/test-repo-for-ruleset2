@@ -1,0 +1,13 @@
+# Copy this to terraform.tfvars and fill in your values
+
+# GitHub configuration for marvell-aws-ps organization
+github_organization = "your github_organization"
+
+# Test with your test repository
+ruleset_name    = "ruleset_name"
+repository_name = "repository_name"
+
+# The following are optional - defaults will be used if not specified
+# target          = "branch"
+# enforcement     = "active"
+# ref_name_include = ["main"]  # Targets main branch by default

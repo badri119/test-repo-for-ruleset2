@@ -1,0 +1,194 @@
+name: Deploy GitHub Rulesets to All Repositories
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      ruleset_name:
+        description: "Name for the ruleset"
+        required: true
+        default: "Organization-Wide-PR-Checks"
+      target_repos:
+        description: "Comma-separated list of repos (leave empty for all repos)"
+        required: false
+        default: ""
+
+  # Automatic trigger on push to main (uncomment if required)
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - '**.tf'
+  #     - '.github/workflows/deploy-rulesets.yml'
+
+jobs:
+  get-repositories:
+    runs-on: ubuntu-latest
+    outputs:
+      repositories: ${{ steps.get-repos.outputs.repositories }}
+    steps:
+      - name: Get organization repositories
+        id: get-repos
+        run: |
+          if [ -n "${{ github.event.inputs.target_repos }}" ]; then
+            # Use manually specified repositories
+            repos_input="${{ github.event.inputs.target_repos }}"
+            # Convert comma-separated string to JSON array
+            repos_json=$(echo "$repos_input" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | jq -R . | jq -s .)
+            echo "repositories=$repos_json" >> $GITHUB_OUTPUT
+          else
+            # Get all repositories in the organization
+            gh api graphql -f query='
+              query($org: String!, $cursor: String) {
+                organization(login: $org) {
+                  repositories(first: 100, after: $cursor, ownerAffiliations: OWNER) {
+                    nodes {
+                      name
+                      isArchived
+                      isDisabled
+                      isEmpty
+                      isFork
+                    }
+                    pageInfo {
+                      hasNextPage
+                      endCursor
+                    }
+                  }
+                }
+              }' -f org=${{ github.repository_owner }} --paginate --jq '
+              .data.organization.repositories.nodes[] | 
+              select(.isArchived == false and .isDisabled == false and .isEmpty == false) | 
+              .name' | jq -R . | jq -s . > repositories.json
+            
+            cat repositories.json
+            echo "repositories=$(cat repositories.json)" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-rulesets:
+    runs-on: ubuntu-latest
+    needs: get-repositories
+    strategy:
+      matrix:
+        repository: ${{ fromJson(needs.get-repositories.outputs.repositories) }}
+      fail-fast: false
+      max-parallel: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ~1.0
+
+      - name: Configure Terraform backend
+        run: |
+          # Create unique backend configuration for each repository
+          cat > backend.tf << EOF
+          terraform {
+            backend "local" {
+              path = "./terraform-${{ matrix.repository }}.tfstate"
+            }
+          }
+          EOF
+
+      - name: Create terraform.tfvars for repository
+        run: |
+          cat > terraform.tfvars << EOF
+          # Auto-generated terraform.tfvars for ${{ matrix.repository }}
+          github_token        = "${{ secrets.GITHUB_TOKEN }}"
+          github_organization = "${{ github.repository_owner }}"
+          repository_name     = "${{ matrix.repository }}"
+          ruleset_name        = "${{ github.event.inputs.ruleset_name || 'Organization-Wide-PR-Checks' }}"
+
+          # Default configuration - customize as needed
+          target              = "branch"
+          enforcement         = "active"
+          ref_name_include    = ["~DEFAULT_BRANCH"]
+
+          # Required status checks
+          enable_required_status_checks = true
+          required_status_checks = [
+            {
+              context = "terraform fmt"
+            },
+            {
+              context = "tflint"
+            },
+            {
+              context = "terraform validate"
+            },
+            {
+              context = "checkov"
+            }
+          ]
+
+          # Pull request rules
+          enable_pull_request_rules = true
+          required_approving_review_count = 1
+          dismiss_stale_reviews_on_push = true
+          require_code_owner_review = false
+          require_last_push_approval = true
+          required_review_thread_resolution = true
+
+          # Protection rules
+          enable_deletion_protection = true
+          enable_non_fast_forward_protection = false
+          enable_required_linear_history = false
+          enable_required_signatures = false
+          EOF
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -no-color
+        continue-on-error: true
+
+      - name: Terraform Apply
+        if: steps.plan.outputs.exitcode == 2
+        run: terraform apply -auto-approve -no-color
+
+      - name: Report success
+        if: success()
+        run: |
+          echo "Successfully applied ruleset to repository: ${{ matrix.repository }}"
+
+      - name: Report failure
+        if: failure()
+        run: |
+          echo "Failed to apply ruleset to repository: ${{ matrix.repository }}"
+          echo "Check the logs above for details"
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [get-repositories, deploy-rulesets]
+    if: always()
+    steps:
+      - name: Job Summary
+        run: |
+          echo "## 🔧 GitHub Rulesets Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Ruleset Name:** ${{ github.event.inputs.ruleset_name || 'Organization-Wide-PR-Checks' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Organization:** ${{ github.repository_owner }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Mode:** Live Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          repositories='${{ needs.get-repositories.outputs.repositories }}'
+          repo_count=$(echo "$repositories" | jq length)
+          echo "**Target Repositories:** $repo_count" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.deploy-rulesets.result }}" == "success" ]; then
+            echo "**Status:** All rulesets deployed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Status:** Some deployments may have failed. Check individual job logs." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Repository List" >> $GITHUB_STEP_SUMMARY
+          echo "$repositories" | jq -r '.[] | "- " + .' >> $GITHUB_STEP_SUMMARY
