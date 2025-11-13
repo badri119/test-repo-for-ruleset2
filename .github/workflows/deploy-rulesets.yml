@@ -113,16 +113,20 @@ jobs:
           enable_required_status_checks = true
           required_status_checks = [
             {
-              context = "terraform fmt"
+              context        = "terraform fmt"
+              integration_id = null
             },
             {
-              context = "tflint"
+              context        = "tflint"
+              integration_id = null
             },
             {
-              context = "terraform validate"
+              context        = "terraform validate"
+              integration_id = null
             },
             {
-              context = "checkov"
+              context        = "checkov"
+              integration_id = null
             }
           ]
 
