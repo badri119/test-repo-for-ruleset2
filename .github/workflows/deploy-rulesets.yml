@@ -171,7 +171,7 @@ jobs:
     steps:
       - name: Job Summary
         run: |
-          echo "## 🔧 GitHub Rulesets Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## GitHub Rulesets Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Ruleset Name:** ${{ github.event.inputs.ruleset_name || 'Organization-Wide-PR-Checks' }}" >> $GITHUB_STEP_SUMMARY
           echo "**Organization:** ${{ github.repository_owner }}" >> $GITHUB_STEP_SUMMARY
