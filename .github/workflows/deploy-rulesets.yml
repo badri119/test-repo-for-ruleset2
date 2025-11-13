@@ -32,8 +32,8 @@ jobs:
           if [ -n "${{ github.event.inputs.target_repos }}" ]; then
             # Use manually specified repositories
             repos_input="${{ github.event.inputs.target_repos }}"
-            # Convert comma-separated string to JSON array - properly handle spaces and create valid JSON
-            repos_json=$(echo "$repos_input" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
+            # Convert comma-separated string to JSON array - output as single line for GitHub Actions
+            repos_json=$(echo "$repos_input" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s -c .)
             echo "Processing repositories: $repos_json"
             echo "repositories=$repos_json" >> $GITHUB_OUTPUT
           else
@@ -58,7 +58,7 @@ jobs:
               }' -f org=${{ github.repository_owner }} --paginate --jq '
               .data.organization.repositories.nodes[] | 
               select(.isArchived == false and .isDisabled == false and .isEmpty == false) | 
-              .name' | jq -R . | jq -s . > repositories.json
+              .name' | jq -R . | jq -s -c . > repositories.json
             
             cat repositories.json
             echo "repositories=$(cat repositories.json)" >> $GITHUB_OUTPUT
