@@ -32,8 +32,9 @@ jobs:
           if [ -n "${{ github.event.inputs.target_repos }}" ]; then
             # Use manually specified repositories
             repos_input="${{ github.event.inputs.target_repos }}"
-            # Convert comma-separated string to JSON array
-            repos_json=$(echo "$repos_input" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | jq -R . | jq -s .)
+            # Convert comma-separated string to JSON array - properly handle spaces and create valid JSON
+            repos_json=$(echo "$repos_input" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | jq -R . | jq -s .)
+            echo "Processing repositories: $repos_json"
             echo "repositories=$repos_json" >> $GITHUB_OUTPUT
           else
             # Get all repositories in the organization
@@ -179,16 +180,24 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           repositories='${{ needs.get-repositories.outputs.repositories }}'
-          repo_count=$(echo "$repositories" | jq length)
-          echo "**Target Repositories:** $repo_count" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Debug - repositories variable: $repositories"
 
-          if [ "${{ needs.deploy-rulesets.result }}" == "success" ]; then
-            echo "**Status:** All rulesets deployed successfully!" >> $GITHUB_STEP_SUMMARY
+          # Check if repositories is valid JSON before processing
+          if echo "$repositories" | jq empty 2>/dev/null; then
+            repo_count=$(echo "$repositories" | jq length)
+            echo "**Target Repositories:** $repo_count" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ needs.deploy-rulesets.result }}" == "success" ]; then
+              echo "**Status:** All rulesets deployed successfully!" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "**Status:** Some deployments may have failed. Check individual job logs." >> $GITHUB_STEP_SUMMARY
+            fi
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Repository List" >> $GITHUB_STEP_SUMMARY
+            echo "$repositories" | jq -r '.[] | "- " + .' >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Status:** Some deployments may have failed. Check individual job logs." >> $GITHUB_STEP_SUMMARY
+            echo "**Error:** Invalid repository list format" >> $GITHUB_STEP_SUMMARY
+            echo "**Debug:** $repositories" >> $GITHUB_STEP_SUMMARY
           fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Repository List" >> $GITHUB_STEP_SUMMARY
-          echo "$repositories" | jq -r '.[] | "- " + .' >> $GITHUB_STEP_SUMMARY
