@@ -1,6 +1,9 @@
-resource "github_repository_ruleset" "this" {
+# Create rulesets for multiple repositories using for_each
+resource "github_repository_ruleset" "repositories" {
+  for_each = toset(var.target_repositories)
+
   name        = var.ruleset_name
-  repository  = var.repository_name
+  repository  = each.value
   target      = var.target
   enforcement = var.enforcement
 
@@ -44,5 +47,4 @@ resource "github_repository_ruleset" "this" {
       }
     }
   }
-
 }

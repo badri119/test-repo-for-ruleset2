@@ -1,29 +1,24 @@
-output "ruleset_id" {
-  description = "The ID of the created GitHub repository ruleset"
-  value       = github_repository_ruleset.this.id
+# Outputs for multiple repositories
+output "rulesets" {
+  description = "Map of repository names to their ruleset details"
+  value = {
+    for repo, ruleset in github_repository_ruleset.repositories : repo => {
+      id          = ruleset.id
+      name        = ruleset.name
+      repository  = ruleset.repository
+      target      = ruleset.target
+      enforcement = ruleset.enforcement
+      node_id     = ruleset.node_id
+    }
+  }
 }
 
-output "ruleset_name" {
-  description = "The name of the created GitHub repository ruleset"
-  value       = github_repository_ruleset.this.name
+output "repository_count" {
+  description = "Number of repositories with rulesets applied"
+  value       = length(github_repository_ruleset.repositories)
 }
 
-output "ruleset_repository" {
-  description = "The repository name where the ruleset is applied"
-  value       = github_repository_ruleset.this.repository
-}
-
-output "ruleset_target" {
-  description = "The target of the ruleset (branch, tag, or push)"
-  value       = github_repository_ruleset.this.target
-}
-
-output "ruleset_enforcement" {
-  description = "The enforcement level of the ruleset"
-  value       = github_repository_ruleset.this.enforcement
-}
-
-output "ruleset_node_id" {
-  description = "The node ID of the created GitHub repository ruleset"
-  value       = github_repository_ruleset.this.node_id
+output "target_repositories" {
+  description = "List of repositories that have rulesets applied"
+  value       = [for repo in github_repository_ruleset.repositories : repo.repository]
 }

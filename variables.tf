@@ -17,9 +17,14 @@ variable "ruleset_name" {
   description = "Ruleset for Marvell Repos"
 }
 
-variable "repository_name" {
-  type        = string
-  description = "Name of the repository where the ruleset will be applied"
+variable "target_repositories" {
+  type        = list(string)
+  description = "List of repository names where rulesets will be applied"
+  
+  validation {
+    condition     = length(var.target_repositories) > 0
+    error_message = "At least one repository must be specified in target_repositories."
+  }
 }
 
 variable "target" {
